@@ -85,7 +85,6 @@ function createSpecialEventsForAllContacts(calendarId) {
             createOrUpdateEvent(calendarService, calendarId, contactName, event.date, `${contactName}'s ${eventLabel}`);
           });
         }
-
       });
 
       pageToken = response.nextPageToken;
@@ -115,8 +114,7 @@ function createOrUpdateEvent(calendarService, calendarId, contactName, eventDate
         const event = calendarService.getCalendarById(calendarId).createAllDayEventSeries(
           eventTitle,
           startDate,
-          CalendarApp.newRecurrence().addYearlyRule(),
-          { eventType: typeOfEvent }
+          CalendarApp.newRecurrence().addYearlyRule()
         );
       } else {
         // Use Calendar Service to create a 'birthday' event in the primary calendar
