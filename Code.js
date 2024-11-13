@@ -9,11 +9,13 @@
 
 // 3) OPTIONAL: Configure the Default Notifications for your Calendar in your Google Calendar Settings
 
-// 4) Make sure "updateBirthdays" is selected in the menu above, then click "Run"
+// 4) OPTIONAL: SET onlyContactLabel to TRUE and fill in the contactLabelID as explained below
 
-// 5) Click 'Advanced' during warnings to proceed, give permissions (to yourself, not me!)
+// 5) Make sure "updateBirthdays" is selected in the menu above, then click "Run"
 
-// 6) DONE! You can run this script again to add new birthdays without creating duplicates
+// 6) Click 'Advanced' during warnings to proceed, give permissions (to yourself, not me!)
+
+// 7) DONE! You can run this script again to add new birthdays without creating duplicates
 
 // Optional: Create a "Trigger" to run updateBirthdays daily to add birthdays from new contacts (see VIDEO linked above)
 // Optional: Set "noLabelTitle" to the title you want for special events with no label
@@ -38,6 +40,14 @@ var noLabelTitle = "Special Event";
 // CHANGE THIS TO 'var onlyBirthdays = true' IF YOU ONLY WANT TO COPY BIRTHDAYS, NOT SPECIAL EVENTS
 var onlyBirthdays = false;
 
+// CHANGE THIS TO 'var onlyContactLabel = true' IF YOU ONLY WANT TO COPY BIRTHDAYS FOR CONTACTS WITH A SPECIFIC LABEL
+// DON'T FORGET TO SET THE contactLabelID BELOW IF THIS IS TRUE!
+var onlyContactLabel = false;
+
+// TO GET THE contactLabelID OPEN https://contacts.google.com/ CLICK YOUR LABEL AND NOTE THE PAGE ADDRESS
+// THE LAST PART OF THE ADDRESS IS THE contactLabelID: https://contacts.google.com/label/[contactLabelID]
+var contactLabelID = "xxxxxxxxxxxxxx";
+
 // ******** CONFIGURATION END : CLICK "SAVE PROJECT" ABOVE BEFORE YOU RUN! ********
 
 
@@ -61,7 +71,7 @@ function createSpecialEventsForAllContacts(calendarId) {
       var response;
       response = peopleService.Connections.list('people/me', {
         pageSize: pageSize,
-        personFields: 'names,birthdays,events',
+        personFields: 'names,birthdays,events,memberships',
         pageToken: pageToken
       });
 
@@ -69,14 +79,23 @@ function createSpecialEventsForAllContacts(calendarId) {
 
       connections.forEach(connection => {
         const names = connection.names || [];
+        const memberships = connection.memberships || [];
+        let hasLabel = false;
+        memberships.forEach(membership => {
+          if (membership.contactGroupMembership != null && membership.contactGroupMembership.contactGroupId.includes(contactLabelID)) {
+            hasLabel = true;
+          }
+        });
+
         const contactName = names.length > 0 ? names[0].displayName : 'Unnamed Contact';
 
+        if (!onlyContactLabel || hasLabel){
         // Process Birthdays
         const birthdays = connection.birthdays || [];
         birthdays.forEach(birthday => {
           createOrUpdateEvent(calendarService, calendarId, contactName, birthday.date, `${contactName}'s Birthday`);
         });
-
+     }
         // Process Special Events (e.g., anniversaries, custom events with labels)
         if (!onlyBirthdays) {
           const events = connection.events || [];
