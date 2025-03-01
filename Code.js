@@ -202,3 +202,54 @@ function createOrUpdateEvent(calendarService, calendarId, contactName, eventDate
     }
   }
 }
+
+
+  // DELETE BIRTHDAYS
+  // To be used if contacts have been deleted/edited, or you've changed the "'Birthday" text and want to start afresh.
+  // Running this will delete ALL birthdays (from Contacts AND this script) on the special "Birthday" calendar
+  // You can recreate Birthdays from Contacts by unchecking then rechecking "Sync from Contacts"
+  // On the Settings page for the Birthdays calendar at this  address:
+  // https://calendar.google.com/calendar/r/settings/birthdays
+
+  // If you did not use the Official Birthday calendar for your events (i.e you set useOriginalBirthdayCalendar to false)
+  // you can change the calendarToDeleteId to the Calendar ID of the calendar you used for your birthdays.
+  // and the script will delete any events containing "Birthday" in the title.
+
+  // For example:
+  // calendarToDeleteId = "jhkhcjskchsjk26783chjsdkchsj178chsjdcks@group.calendar.google.com";
+
+  // If you used a different word (e.g "Geburtstag") then change the word "Birthday" where you see:
+  // event.summary.includes("Birthday") in the script below to: event.summary.includes("Geburtstag")
+
+function deleteBirthdays() {
+    // CHANGE primary ONLY ON THIS LINE!
+    calendarToDeleteId = "primary";
+
+    try {
+    var pageToken;
+    do {
+      var response = Calendar.Events.list(calendarToDeleteId, { pageToken: pageToken });
+      var events = response.items;
+      
+      if (!events || events.length === 0) {
+        Logger.log("No events found.");
+        return;
+      }
+      
+      for (var i = 0; i < events.length; i++) {
+        var event = events[i];
+        
+        // CHANGE ...event.summary.includes("Birthday") to ...event.summary.includes("Geburtstag") if necessary:
+        if (event.eventType === "birthday" || (calendarToDeleteId != "primary" && event.summary.includes("Birthday"))) {
+          // Checks if event type is a true birthday OR contains 'Birthday' if you aren't using the Official Birthday Calendar
+          Calendar.Events.remove(calendarToDeleteId, event.id);
+          Logger.log("Deleted event: " + event.summary);
+        }
+      }
+      
+      pageToken = response.nextPageToken;
+    } while (pageToken);
+  } catch (e) {
+    Logger.log("Error: " + e.message);
+  }
+}
