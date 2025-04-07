@@ -426,9 +426,53 @@ GCalTools.showConfiguration = function() {
 };
 
 /**
+ * Collects all unique special event labels from user's contacts
+ * @return {Array} Array of unique event type labels
+ */
+GCalTools.collectEventLabels = function() {
+  const peopleService = People.People;
+  let uniqueLabels = new Set();
+  uniqueLabels.add("Birthday"); // Always include Birthday
+  uniqueLabels.add(noLabelTitle); // Add the configured noLabelTitle
+
+  try {
+    let pageToken = null;
+    const pageSize = 100;
+    
+    do {
+      var response = peopleService.Connections.list('people/me', {
+        pageSize: pageSize,
+        personFields: 'events',
+        pageToken: pageToken
+      });
+
+      const connections = response.connections || [];
+      
+      connections.forEach(connection => {
+        const events = connection.events || [];
+        events.forEach(event => {
+          if (event.formattedType) {
+            uniqueLabels.add(event.formattedType);
+          }
+        });
+      });
+      
+      pageToken = response.nextPageToken;
+    } while (pageToken);
+    
+    Logger.log(`Collected ${uniqueLabels.size} unique event labels from contacts`);
+    return Array.from(uniqueLabels);
+  } catch (error) {
+    Logger.log("Error collecting event labels: " + error.message);
+    // Return default labels if there's an error
+    return ["Birthday", "Anniversary", noLabelTitle, "Special Event"];
+  }
+};
+
+/**
  * Delete events from a calendar matching criteria
  * @param {string} calendarId - ID of the calendar to delete events from
- * @param {string} pattern - Text pattern to match in event titles (for non-primary calendars)
+ * @param {string|Array} pattern - Text pattern or array of patterns to match in event titles
  * @param {boolean} onlyFutureEvents - Whether to only delete future events
  * @param {boolean} isDryRun - Whether to simulate deletion without actually deleting
  * @return {number} Number of events deleted
@@ -436,6 +480,9 @@ GCalTools.showConfiguration = function() {
 GCalTools.deleteEvents = function(calendarId, pattern, onlyFutureEvents, isDryRun) {
   var eventsDeleted = 0;
 
+  // Convert single pattern to array for consistency
+  var patterns = Array.isArray(pattern) ? pattern : [pattern];
+  
   try {
     // First validate that the calendar exists before proceeding
     try {
@@ -447,6 +494,21 @@ GCalTools.deleteEvents = function(calendarId, pattern, onlyFutureEvents, isDryRu
     } catch (calError) {
       Logger.log(`Error: Calendar not found or invalid ID: ${calendarId}`);
       return -1; // Return a special code to indicate calendar not found
+    }
+    
+    // For secondary calendars, get all event labels from contacts to use as patterns
+    if (calendarId !== "primary" && !useOriginalBirthdayCalendar) {
+      if (!onlyBirthdays) {
+        // Add all unique event labels from contacts to our patterns
+        var contactEventLabels = GCalTools.collectEventLabels();
+        patterns = patterns.concat(contactEventLabels);
+        // Remove duplicates
+        patterns = [...new Set(patterns)];
+      }
+    }
+    
+    if (isDryRun) {
+      Logger.log("DRY RUN: Will search for events with these patterns: " + patterns.join(", "));
     }
     
     var pageToken;
@@ -472,11 +534,12 @@ GCalTools.deleteEvents = function(calendarId, pattern, onlyFutureEvents, isDryRu
       for (var i = 0; i < events.length; i++) {
         var event = events[i];
         
-        // More flexible deletion criteria
-        var shouldDelete = event.eventType === "birthday";
+        // For primary calendar, use the birthday event type
+        var shouldDelete = (calendarId === "primary" && event.eventType === "birthday");
         
-        if (!shouldDelete && calendarId !== "primary") {
-          shouldDelete = event.summary.includes(pattern);
+        // For secondary calendars, match against our patterns
+        if (!shouldDelete) {
+          shouldDelete = patterns.some(p => event.summary.includes(p));
         }
         
         if (shouldDelete) {
@@ -493,7 +556,7 @@ GCalTools.deleteEvents = function(calendarId, pattern, onlyFutureEvents, isDryRu
       pageToken = response.nextPageToken;
     } while (pageToken);
     
-    Logger.log(`Total events deleted: ${eventsDeleted}`);
+    Logger.log(`Total events ${isDryRun ? "that would be" : ""} deleted: ${eventsDeleted}`);
     return eventsDeleted;
   } catch (e) {
     Logger.log("Error: " + e.message);

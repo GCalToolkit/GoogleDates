@@ -52,8 +52,11 @@ var contactLabelID = "xxxxxxxxxxxxxx";
 // Set useDefaultReminders to true to use the calendar's default reminder settings
 
 // USE CALENDAR'S DEFAULT REMINDERS?
-// WARNING: GOOGLE REMINDERS BUG - Main Calendar 'Event notifications' will be applied, NOT 'All Day Event notifications' and NOT 'Birthday' calendar reminder settings!
-var useDefaultReminders = true; // Set to false to use custom reminders below
+// WARNING: GOOGLE REMINDERS BUG!
+// When using Original Birthday Calendar, the Main Calendar 'Event notifications' will be applied, NOT 'All Day Event notifications' and NOT 'Birthday' calendar reminder settings!
+// When using a Secondary Calendar, that calendars default reminders will be applied - which you can change later.
+// PREFER USING DEFAULT REMINDERS SO YOU CAN CHANGE THEM IN THE CALENDAR SETTINGS LATER.
+var useDefaultReminders = true;
 
 // EMAIL REMINDERS (set to 0 to disable)
 var emailReminder1 = 0;          // minutes before (e.g., 60 for 1 hour, 1440 for 1 day)
@@ -84,7 +87,7 @@ if (!useDefaultReminders) {
 
 // ADDITIONAL CONFIGURATION OPTIONS:
 
-// CHANGE THIS TO true TO PREVIEW CHANGES WITHOUT ACTUALLY CREATING EVENTS
+// CHANGE THIS TO true TO PREVIEW CHANGES WITHOUT ACTUALLY CREATING/DELETING EVENTS
 // Or run the "dryRunUpdate" function to see what would be changed
 var dryRun = false;
 
@@ -136,12 +139,29 @@ function updateBirthdays() {
 }
 
 /**
- * Deletes birthday events from the calendar based on your configuration
+ * Deletes birthday and special events from the calendar based on your configuration
  */
-function deleteBirthdays() {
+function deleteEvents() {
   const calendarToDeleteId = useOriginalBirthdayCalendar ? 'primary' : calendarId;
-  const pattern = deleteSearchPattern || "Birthday";
-  return GCalTools.deleteEvents(calendarToDeleteId, pattern, deleteOnlyFutureEvents, dryRun);
+  let patterns = [];
+  
+  if (useOriginalBirthdayCalendar) {
+    // For primary calendar, use the standard pattern that matches the birthday flag
+    patterns.push(deleteSearchPattern || "Birthday");
+  } else {
+    // For secondary calendars, we'll gather labels from contacts in the utility function
+    if (deleteSearchPattern) {
+      patterns.push(deleteSearchPattern);
+    } else {
+      patterns.push("Birthday"); // Always include Birthday
+    }
+  }
+  
+  if (dryRun) {
+    Logger.log("DRY RUN MODE: No events will be deleted, only logged");
+  }
+  
+  return GCalTools.deleteEvents(calendarToDeleteId, patterns, deleteOnlyFutureEvents, dryRun);
 }
 
 /**
@@ -152,6 +172,17 @@ function deleteBirthdays() {
 function dryRunUpdate() {
   dryRun = true;
   updateBirthdays();
+  dryRun = false;
+}
+
+/**
+ * Displays what would be deleted in the Execution Log without editing the calendar
+ * (useful for testing)
+ */
+
+function dryRunDelete() {
+  dryRun = true;
+  deleteEvents();
   dryRun = false;
 }
 
