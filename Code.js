@@ -40,216 +40,125 @@ var onlyBirthdays = false;
 
 // CHANGE THIS TO 'var onlyContactLabel = true' IF YOU ONLY WANT TO COPY BIRTHDAYS FOR CONTACTS WITH A SPECIFIC LABEL
 // DON'T FORGET TO SET THE contactLabelID BELOW IF THIS IS true
+// USEFUL IF YOU HAVE TOO MANY CONTACTS AND THE SCRIPT WON'T FINISH
 var onlyContactLabel = false;
 // TO GET THE contactLabelID OPEN https://contacts.google.com/ CLICK YOUR LABEL AND NOTE THE PAGE ADDRESS
 // THE LAST PART OF THE ADDRESS IS THE contactLabelID: https://contacts.google.com/label/[contactLabelID]
 var contactLabelID = "xxxxxxxxxxxxxx";
 
 // REMINDER IN MINUTES
-// addReminder must be set to none, email or popup. When using 'none' the calendar's default reminder will be applied, if set.
-var addReminder = "none";
-var reminderMinutes = 60 * 12; // 12 HOURS EARLIER = 12:00PM THE PREVIOUS DAY
-// For hours/days write arithmetic e.g for 10pm four days earlier use: 3 * 24 * 60 + 2 * 60
-// Note: birthdays start at 00:00 so the above is 3 days + 2 hours earlier (4 days earlier)
+// Use the following variables to configure your reminders
+// Set to 0 to disable a particular reminder type
+// Set useDefaultReminders to true to use the calendar's default reminder settings
+
+// USE CALENDAR'S DEFAULT REMINDERS?
+// WARNING: GOOGLE REMINDERS BUG - Main Calendar 'Event notifications' will be applied, NOT 'All Day Event notifications' and NOT 'Birthday' calendar reminder settings!
+var useDefaultReminders = true; // Set to false to use custom reminders below
+
+// EMAIL REMINDERS (set to 0 to disable)
+var emailReminder1 = 0;          // minutes before (e.g., 60 for 1 hour, 1440 for 1 day)
+var emailReminder2 = 0;          // minutes before (second email reminder, 0 to disable)
+
+// POPUP REMINDERS (set to 0 to disable)
+var popupReminder1 = 60 * 12;    // 12 hours before (720 minutes)
+var popupReminder2 = 0;          // minutes before (second popup reminder, 0 to disable)
+
+// For hours/days, here are some examples:
+// 30 minutes = 30
+// 1 hour = 60
+// 12 hours = 60 * 12 = 720
+// 1 day = 60 * 24 = 1440
+// 2 days = 60 * 24 * 2 = 2880
+// 1 week = 60 * 24 * 7 = 10080
+
+// *** DON'T MODIFY THIS SECTION ***
+// This creates the reminders array from your settings above
+var reminders = [];
+if (!useDefaultReminders) {
+  if (popupReminder1 > 0) reminders.push({ method: "popup", minutes: popupReminder1 });
+  if (popupReminder2 > 0) reminders.push({ method: "popup", minutes: popupReminder2 });
+  if (emailReminder1 > 0) reminders.push({ method: "email", minutes: emailReminder1 });
+  if (emailReminder2 > 0) reminders.push({ method: "email", minutes: emailReminder2 });
+}
+// *** END OF REMINDERS CONFIGURATION ***
+
+// ADDITIONAL CONFIGURATION OPTIONS:
+
+// CHANGE THIS TO true TO PREVIEW CHANGES WITHOUT ACTUALLY CREATING EVENTS
+// Or run the "dryRunUpdate" function to see what would be changed
+var dryRun = false;
+
+// CUSTOMIZE EVENT TITLE FORMATS (leave blank to use default format)
+// Available variables: {name} - contact's name, {eventType} - the type of event
+var birthdayTitleFormat = ""; // Default: "{name}'s Birthday"
+var specialEventTitleFormat = ""; // Default: "{name}'s {eventType}"
+
+// ADD CUSTOM DESCRIPTIONS TO EVENTS (Only possible if you are using a secondary calendar)
+var addCustomDescriptions = false;
+var birthdayDescription = "Birthday celebration for {name}";
+var specialEventDescription = "{eventType} for {name}";
+
+// FILTER EVENTS BY DATE RANGE
+// USEFUL IF YOU HAVE TOO MANY CONTACTS AND THE SCRIPT WON'T FINISH
+// Set specific months or days to include, or leave empty [] for all
+// Examples:
+// var filterMonths = [1, 2];    // Only January and February
+// var filterMonths = [12];      // Only December
+// var filterMonths = [];        // All months (default)
+var filterMonths = [];          // 1-12 for specific months, empty array for all months
+
+// Examples:
+// var filterDays = [1, 15, 31]; // Only 1st, 15th and 31st days of the month
+// var filterDays = [25];        // Only 25th day of the month
+// var filterDays = [];          // All days (default)
+var filterDays = [];            // 1-31 for specific days, empty array for all days
+
+// MORE FLEXIBLE CLEANUP OPTIONS
+var deleteSearchPattern = ""; // Custom text to search for when deleting events (empty for default)
+var deleteOnlyFutureEvents = false; // Set to true to keep past events when deleting
 
 
 // ******** CONFIGURATION END : CLICK "SAVE PROJECT" ABOVE BEFORE YOU RUN! ********
 
 
 
-
+// These are the only two functions that appear in the "Run" menu
 // DO NOT EDIT BELOW THIS LINE UNLESS YOU UNDERSTAND WHAT YOU ARE DOING
 
+/**
+ * Updates birthdays and special events from Google Contacts to your calendar
+ */
 function updateBirthdays() {
-  createSpecialEventsForAllContacts(useOriginalBirthdayCalendar ? "primary" : calendarId);
-}
-
-function createSpecialEventsForAllContacts(calendarId) {
-  const peopleService = People.People;
-  const calendarService = CalendarApp;
-
-  let pageToken = null;
-  const pageSize = 100;
-
-  try {
-    do {
-      var response;
-      response = peopleService.Connections.list('people/me', {
-        pageSize: pageSize,
-        personFields: 'names,birthdays,events,memberships',
-        pageToken: pageToken
-      });
-
-      const connections = response.connections || [];
-
-      connections.forEach(connection => {
-        const names = connection.names || [];
-        const memberships = connection.memberships || [];
-        let hasLabel = false;
-        memberships.forEach(membership => {
-          if (membership.contactGroupMembership != null && membership.contactGroupMembership.contactGroupId.includes(contactLabelID)) {
-            hasLabel = true;
-          }
-        });
-
-        const contactName = names.length > 0 ? names[0].displayName : 'Unnamed Contact';
-
-        if (!onlyContactLabel || hasLabel) {
-          // Process Birthdays
-          const birthdays = connection.birthdays || [];
-          birthdays.forEach(birthday => {
-            createOrUpdateEvent(calendarService, calendarId, contactName, birthday.date, `${contactName}'s Birthday`);
-          });
-        }
-        // Process Special Events (e.g., anniversaries, custom events with labels)
-        if (!onlyBirthdays) {
-          const events = connection.events || [];
-          events.forEach(event => {
-            const eventLabel = event.formattedType || noLabelTitle; // Use the label from formattedType or a default
-            createOrUpdateEvent(calendarService, calendarId, contactName, event.date, `${contactName}'s ${eventLabel}`);
-          });
-        }
-      });
-
-      pageToken = response.nextPageToken;
-    } while (pageToken);
-  } catch (error) {
-    Logger.log("Check the CONFIGURATION section is correct: " + error.message);
+  if (dryRun) {
+    Logger.log("DRY RUN MODE: No events will be created, only logged");
   }
+  GCalTools.createSpecialEventsForAllContacts(useOriginalBirthdayCalendar ? "primary" : calendarId);
 }
 
-function createOrUpdateEvent(calendarService, calendarId, contactName, eventDate, eventTitle) {
-  var typeOfEvent = useOriginalBirthdayCalendar ? "birthday" : "default";
-  if (eventDate) {
-
-    // Handle cases where the event year might be undefined
-    const year = eventDate.year || new Date().getFullYear(); // Use current year if not specified
-    const startDate = new Date(year, eventDate.month - 1, eventDate.day);
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 1);
-
-    // Check for existing events specifically for this contact on the event date
-    const existingEvents = calendarService.getCalendarById(calendarId).getEvents(startDate, endDate);
-    const eventExists = existingEvents.some(event => event.getTitle() === eventTitle);
-    var event;
-    // Create the event if it doesn't already exist
-    if (!eventExists) {
-      if (!useOriginalBirthdayCalendar) {
-        // Use CalendarApp to create a regular event in a regular calendar
-        event = calendarService.getCalendarById(calendarId).createAllDayEventSeries(
-          eventTitle,
-          startDate,
-          CalendarApp.newRecurrence().addYearlyRule()
-        );
-        switch (addReminder) {
-          case "email":
-            event.addEmailReminder(reminderMinutes);
-            break;
-          case "popup":
-            event.addPopupReminder(reminderMinutes);
-            break;
-          default:
-            break;
-        }
-      } else {
-        // Use Calendar Service to create a 'birthday' event in the primary calendar
-        var sdd = startDate.getDate();
-        var smm = startDate.getMonth() + 1;
-        var syyyy = startDate.getFullYear();
-        var edd = endDate.getDate();
-        var emm = endDate.getMonth() + 1;
-        var eyyyy = endDate.getFullYear();
-
-        rrule = "RRULE:FREQ=YEARLY";
-        // Exception for Feb 29th!
-        if (smm === 2 && sdd === 29) rrule = "RRULE:FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=-1";
-
-        if (addReminder != "none") {
-          eventJSON = {
-            start: { date: syyyy + "-" + smm + "-" + sdd },
-            end: { date: eyyyy + "-" + emm + "-" + edd },
-            eventType: 'birthday',
-            recurrence: [rrule],
-            summary: eventTitle,
-            transparency: "transparent",
-            visibility: "private",
-            reminders: {
-              useDefault: false,
-              overrides: [
-                {
-                  method: addReminder,
-                  minutes: reminderMinutes
-                }
-              ]
-            }
-          }
-        } else {
-          eventJSON = {
-            start: { date: syyyy + "-" + smm + "-" + sdd },
-            end: { date: eyyyy + "-" + emm + "-" + edd },
-            eventType: 'birthday',
-            recurrence: [rrule],
-            summary: eventTitle,
-            transparency: "transparent",
-            visibility: "private"
-          }
-        }
-        event = Calendar.Events.insert(eventJSON, calendarId);
-      }
-      Logger.log(`${eventTitle} created for ${contactName} on ${startDate.toDateString()}`);
-    } else {
-      Logger.log(`${eventTitle} already exists for ${contactName} on ${startDate.toDateString()}`);
-    }
-  }
-}
-
-
-  // DELETE BIRTHDAYS
-  // To be used if contacts have been deleted/edited, or you've changed the "'Birthday" text and want to start afresh.
-  // Running this will delete ALL birthdays (from Contacts AND this script) on the special "Birthday" calendar
-  // You can recreate Birthdays from Contacts by unchecking then rechecking "Sync from Contacts"
-  // On the Settings page for the Birthdays calendar at this  address:
-  // https://calendar.google.com/calendar/r/settings/birthdays
-
-  // If you did not use the Official Birthday calendar for your events (i.e you set useOriginalBirthdayCalendar to false)
-  // you can change the calendarToDeleteId to the Calendar ID of the calendar you used for your birthdays.
-  // and the script will delete any events containing "Birthday" in the title.
-
-  // For example:
-  // calendarToDeleteId = "jhkhcjskchsjk26783chjsdkchsj178chsjdcks@group.calendar.google.com";
-
-  // If you used a different word (e.g "Geburtstag") then change the word "Birthday" where you see:
-  // event.summary.includes("Birthday") in the script below to: event.summary.includes("Geburtstag")
-
+/**
+ * Deletes birthday events from the calendar based on your configuration
+ */
 function deleteBirthdays() {
-    // CHANGE primary ONLY ON THIS LINE!
-    calendarToDeleteId = "primary";
+  const calendarToDeleteId = useOriginalBirthdayCalendar ? 'primary' : calendarId;
+  const pattern = deleteSearchPattern || "Birthday";
+  return GCalTools.deleteEvents(calendarToDeleteId, pattern, deleteOnlyFutureEvents, dryRun);
+}
 
-    try {
-    var pageToken;
-    do {
-      var response = Calendar.Events.list(calendarToDeleteId, { pageToken: pageToken });
-      var events = response.items;
-      
-      if (!events || events.length === 0) {
-        Logger.log("No events found.");
-        return;
-      }
-      
-      for (var i = 0; i < events.length; i++) {
-        var event = events[i];
-        
-        // CHANGE ...event.summary.includes("Birthday") to ...event.summary.includes("Geburtstag") if necessary:
-        if (event.eventType === "birthday" || (calendarToDeleteId != "primary" && event.summary.includes("Birthday"))) {
-          // Checks if event type is a true birthday OR contains 'Birthday' if you aren't using the Official Birthday Calendar
-          Calendar.Events.remove(calendarToDeleteId, event.id);
-          Logger.log("Deleted event: " + event.summary);
-        }
-      }
-      
-      pageToken = response.nextPageToken;
-    } while (pageToken);
-  } catch (e) {
-    Logger.log("Error: " + e.message);
-  }
+/**
+ * Displays what would be changed in the Execution Log without editing the calendar
+ * (useful for testing)
+ */
+
+function dryRunUpdate() {
+  dryRun = true;
+  updateBirthdays();
+  dryRun = false;
+}
+
+/**
+ * Displays the current configuration in the Execution Log
+ */
+
+function showConfiguration() {
+  return GCalTools.showConfiguration();
 }
