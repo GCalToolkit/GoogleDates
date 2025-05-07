@@ -117,7 +117,7 @@ var filterMonths = [];          // 1-12 for specific months, empty array for all
 var filterDays = [];            // 1-31 for specific days, empty array for all days
 
 // MORE FLEXIBLE CLEANUP OPTIONS
-var deleteSearchPattern = ""; // Custom text to search for when deleting events (empty for default)
+var deleteSearchPattern = ""; // Custom text to search for when deleting events in secondary calendars (empty for default)
 var deleteOnlyFutureEvents = false; // Set to true to keep past events when deleting
 
 

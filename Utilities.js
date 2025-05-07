@@ -537,8 +537,8 @@ GCalTools.deleteEvents = function(calendarId, pattern, onlyFutureEvents, isDryRu
         // For primary calendar, use the birthday event type
         var shouldDelete = (calendarId === "primary" && event.eventType === "birthday");
         
-        // For secondary calendars, match against our patterns
-        if (!shouldDelete && event.summary && patterns && patterns.length > 0) {
+        // For secondary calendars ONLY, match against our patterns
+        if (!shouldDelete && calendarId !== "primary" && event.summary && patterns && patterns.length > 0) {
           shouldDelete = patterns.some(p => event.summary.includes(p));
         }
 
