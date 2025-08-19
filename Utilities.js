@@ -268,128 +268,10 @@ GCalTools.formatMinutes = function(minutes) {
   return `${days} days`;
 };
 
-// UI Functions
-
-// Function to create a menu in Google Sheets UI for easy access
-function onOpen() {
-  var ui = SpreadsheetApp.getUi();
-  ui.createMenu('Google Dates')
-    .addItem('Update Birthdays & Events', 'updateBirthdays')
-    .addSeparator()
-    .addItem('Delete Birthdays', 'deleteBirthdays')
-    .addSeparator()
-    .addItem('Preview Changes (Dry Run)', 'dryRunUpdate')
-    .addSeparator()
-    .addItem('Show Configuration', 'showConfiguration')
-    .addToUi();
-}
-
-// Also add menu for Docs and Forms since this might be used in different contexts
-function onOpenDocs() {
-  var ui = DocumentApp.getUi();
-  createCustomMenu(ui);
-}
-
-function onOpenForms() {
-  var ui = FormApp.getUi();
-  createCustomMenu(ui);
-}
-
-// Helper function to create consistent menu across apps
-function createCustomMenu(ui) {
-  ui.createMenu('Google Dates')
-    .addItem('Update Birthdays & Events', 'updateBirthdays')
-    .addSeparator()
-    .addItem('Delete Birthdays', 'deleteBirthdays')
-    .addSeparator()
-    .addItem('Preview Changes (Dry Run)', 'dryRunUpdate')
-    .addSeparator()
-    .addItem('Show Configuration', 'showConfiguration')
-    .addToUi();
-}
-
-// Improved configuration UI to display all important settings
-GCalTools.showConfigUi = function() {
-  var remindersList = [];
-  if (useDefaultReminders) {
-    remindersList.push("Using calendar default reminders");
-  } else {
-    if (popupReminder1 > 0) remindersList.push(`Popup reminder ${GCalTools.formatMinutes(popupReminder1)} before`);
-    if (popupReminder2 > 0) remindersList.push(`Popup reminder ${GCalTools.formatMinutes(popupReminder2)} before`);
-    if (emailReminder1 > 0) remindersList.push(`Email reminder ${GCalTools.formatMinutes(emailReminder1)} before`);
-    if (emailReminder2 > 0) remindersList.push(`Email reminder ${GCalTools.formatMinutes(emailReminder2)} before`);
-    if (remindersList.length === 0) remindersList.push("No reminders configured");
-  }
-  
-  var monthsDisplay = filterMonths.length === 0 ? "All" : filterMonths.sort((a, b) => a - b).join(", ");
-  var daysDisplay = filterDays.length === 0 ? "All" : filterDays.sort((a, b) => a - b).join(", ");
-  
-  var currentSettings = `
-    <style>
-      .settings-table { border-collapse: collapse; width: 100%; }
-      .settings-table td, .settings-table th { border: 1px solid #ddd; padding: 8px; }
-      .settings-table tr:nth-child(even) { background-color: #f2f2f2; }
-      .settings-row-header { font-weight: bold; }
-    </style>
-    <h2>Google Dates Configuration</h2>
-    <table class="settings-table">
-      <tr><td class="settings-row-header">Calendar ID:</td><td>${calendarId}</td></tr>
-      <tr><td class="settings-row-header">Using Original Birthday Calendar:</td><td>${useOriginalBirthdayCalendar}</td></tr>
-      <tr><td class="settings-row-header">Only Birthdays:</td><td>${onlyBirthdays}</td></tr>
-      <tr><td class="settings-row-header">Reminders:</td><td>${remindersList.join("<br>")}</td></tr>
-      <tr><td class="settings-row-header">No Label Title:</td><td>${noLabelTitle}</td></tr>
-      <tr><td class="settings-row-header">Only Contact Label:</td><td>${onlyContactLabel}</td></tr>
-      <tr><td class="settings-row-header">Contact Label ID:</td><td>${contactLabelID}</td></tr>
-      <tr><td class="settings-row-header">Dry Run Mode:</td><td>${dryRun}</td></tr>
-      <tr><td class="settings-row-header">Filter by Months:</td><td>${monthsDisplay}</td></tr>
-      <tr><td class="settings-row-header">Filter by Days:</td><td>${daysDisplay}</td></tr>
-      <tr><td class="settings-row-header">Add Custom Descriptions:</td><td>${addCustomDescriptions}</td></tr>
-    </table>
-    <p>To modify settings, edit the configuration section in the script editor.</p>
-    <p><small>This tool is provided by GCalTools (www.gcaltools.com)</small></p>
-  `;
-  
-  var html = HtmlService.createHtmlOutput(currentSettings)
-    .setWidth(450)
-    .setHeight(400)
-    .setTitle('Google Dates Configuration');
-  
-  // Try different UI contexts since we don't know which Google app is active
-  try {
-    SpreadsheetApp.getUi().showModalDialog(html, 'Google Dates Configuration');
-  } catch (e) {
-    try {
-      DocumentApp.getUi().showModalDialog(html, 'Google Dates Configuration');
-    } catch (e2) {
-      try {
-        FormApp.getUi().showModalDialog(html, 'Google Dates Configuration');
-      } catch (e3) {
-        try {
-          // If running in standalone script, use this method
-          var htmlOutput = HtmlService.createHtmlOutput(currentSettings)
-            .setWidth(450)
-            .setHeight(400);
-          ScriptApp.getAuthorizationInfo(ScriptApp.AuthMode.FULL)
-          ScriptApp.getUi().showModalDialog(htmlOutput, 'Google Dates Configuration');
-        } catch (e4) {
-          // If all else fails, log the configuration
-          Logger.log("Could not display UI. Current configuration:");
-          Logger.log("Calendar ID: " + calendarId);
-          Logger.log("Using Original Birthday Calendar: " + useOriginalBirthdayCalendar);
-          Logger.log("Only Birthdays: " + onlyBirthdays);
-          // More logs...
-        }
-      }
-    }
-  }
-};
-
 GCalTools.showConfiguration = function() {
   // For standalone execution from script editor
   Logger.log("=== Current Google Dates Configuration ===");
-  Logger.log("Calendar ID: " + calendarId);
-  Logger.log("Using Original Birthday Calendar: " + useOriginalBirthdayCalendar);
-  Logger.log("Only Birthdays: " + onlyBirthdays);
+
   Logger.log("No Label Title: " + noLabelTitle);
   Logger.log("Only Contact Label: " + onlyContactLabel);
   Logger.log("Contact Label ID: " + contactLabelID);
@@ -414,13 +296,6 @@ GCalTools.showConfiguration = function() {
     }
   }
   Logger.log("=== End of Configuration ===");
-  
-  // Also try to show UI if possible
-  try {
-    GCalTools.showConfigUi();
-  } catch (e) {
-    Logger.log("Configuration has been logged. Check the Logs panel (Ctrl+Enter or Cmd+Enter) to view it.");
-  }
   
   return "Configuration has been logged. Check the Logs panel (Ctrl+Enter or Cmd+Enter) to view it.";
 };
